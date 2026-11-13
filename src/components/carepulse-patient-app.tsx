@@ -114,8 +114,11 @@ export function CarePulsePatientApp() {
   };
 
   const bookDemo = () => {
+    const firstDoctor = doctors.at(0);
+    if (!firstDoctor) return;
+
     setActiveView("doctors");
-    setChosenDoctor(doctors[0].name);
+    setChosenDoctor(firstDoctor.name);
   };
 
   const current = activeView === "account" ? null : heading[activeView];
