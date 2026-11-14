@@ -1,4 +1,4 @@
 - [x] Build CarePulse patient-facing sample app and core navigation.
 - [x] Add Capacitor Android handoff instructions.
-- [ ] Verify routes, interactions, mobile/desktop presentation, and preview diagnostics.
-- [ ] Leave live data/auth/AI integration blocked until the existing clinic database is connected and the screening safety specification is available.
+- [x] Verify routes, interactions, mobile/desktop presentation, and preview diagnostics.
+- [x] Keep live data/auth/AI integration blocked until the existing clinic database is connected and the screening safety specification is available.
