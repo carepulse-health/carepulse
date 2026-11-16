@@ -629,6 +629,10 @@ export type Database = {
     }
     Functions: {
       carepulse_send_due_appointment_reminders: { Args: never; Returns: number }
+      submit_carepulse_screening: {
+        Args: { _answers: Json; _submission_id: string }
+        Returns: Json
+      }
       verify_appointment_pass: {
         Args: { _reference_code: string; _token: string }
         Returns: boolean
