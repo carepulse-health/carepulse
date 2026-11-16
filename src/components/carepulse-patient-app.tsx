@@ -33,7 +33,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 
 type View = "home" | "doctors" | "appointments" | "assistant" | "notifications" | "account";
 type AccountView = "login" | "register" | "forgot";
