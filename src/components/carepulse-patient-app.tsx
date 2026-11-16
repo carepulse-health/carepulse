@@ -1,4 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { usePatientSession, type PatientRecordState } from "@/hooks/use-patient-session";
+import type { Session } from "@supabase/supabase-js";
 import {
   Activity,
   ArrowDownRight,
@@ -96,6 +99,7 @@ function DoctorRow({ doctor, onBook }: { doctor: (typeof doctors)[number]; onBoo
 
 export function CarePulsePatientApp() {
   const [activeView, setActiveView] = useState<View>("home");
+  const { session, record } = usePatientSession();
   const [accountView, setAccountView] = useState<AccountView>("login");
   const [searchTerm, setSearchTerm] = useState("");
   const [bannerOpen, setBannerOpen] = useState(true);
@@ -154,7 +158,7 @@ export function CarePulsePatientApp() {
           <div className="mt-auto border-t border-care-line pt-4">
             <Button variant="ghost" onClick={() => go("account")} className="h-auto w-full justify-start gap-3 rounded-md px-2 py-2 text-left">
               <Avatar className="size-9 rounded-md bg-care-panel"><AvatarFallback className="rounded-md bg-care-panel text-xs font-semibold text-care-deep">PA</AvatarFallback></Avatar>
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-care-ink">Patient account</span><span className="block text-xs text-muted-foreground">Preview mode</span></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-care-ink">Patient account</span><span className="block truncate text-xs text-muted-foreground">{session?.user.email ?? "Sign in"}</span></span>
               <ChevronRight className="size-4 text-muted-foreground" />
             </Button>
           </div>
@@ -254,7 +258,7 @@ export function CarePulsePatientApp() {
 
             {activeView === "appointments" && <div className="space-y-5">
               <section className="flex flex-wrap items-center justify-between gap-3 border-b border-care-line pb-4"><p className="text-sm text-muted-foreground">Sample appointments · no booking information is stored.</p><div className="flex gap-1 rounded-md bg-muted p-1"><Button size="sm" variant={appointmentTab === "upcoming" ? "default" : "ghost"} onClick={() => setAppointmentTab("upcoming")} className="h-8 px-3 text-xs">Upcoming</Button><Button size="sm" variant={appointmentTab === "past" ? "default" : "ghost"} onClick={() => setAppointmentTab("past")} className="h-8 px-3 text-xs">Past visits</Button></div></section>
-              {appointmentTab === "upcoming" ? <article className="max-w-2xl overflow-hidden rounded-md border border-care-line bg-background"><div className="flex items-center justify-between gap-2 border-b border-care-line bg-care-panel/60 px-4 py-3"><span className="flex items-center gap-2 text-xs font-semibold text-care-deep"><span className="size-2 rounded-full bg-care-amber" /> EXAMPLE REQUEST</span><Badge variant="outline" className="border-care-line bg-background text-[10px]">Not submitted</Badge></div><div className="p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-display text-xl font-semibold">Friday, November 13</p><p className="mt-1 text-sm text-muted-foreground">11:30 AM · Family medicine</p></div><span className="grid size-11 place-items-center rounded-md bg-care-mist text-care-teal"><CalendarDays className="size-5" /></span></div><div className="mt-5 space-y-3 border-t border-care-line pt-4 text-sm"><p className="flex items-center gap-2"><Stethoscope className="size-4 text-care-teal" />Dr. Amara Okafor</p><p className="flex items-center gap-2"><MapPin className="size-4 text-care-teal" />Clinic location · sample only</p></div><div className="mt-5 border-t border-care-line pt-4"><Button onClick={() => go("doctors")} variant="outline" size="sm" className="gap-2"><Plus className="size-3.5" /> Explore sample times</Button><p className="mt-3 text-[11px] text-muted-foreground">Appointment passes are unavailable until the clinic connection is configured.</p></div></div></article> : <div className="max-w-2xl rounded-md border border-care-line bg-background px-4 py-3"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-md bg-muted text-muted-foreground"><FileHeart className="size-[18px]" /></span><div><p className="text-sm font-semibold">Annual wellness visit</p><p className="mt-1 text-xs text-muted-foreground">Sample history · Tuesday, September 8</p></div><span className="ml-auto text-xs text-muted-foreground">Example only</span></div></div>}
+              {record.status === "linked" ? <LiveAppointments record={record} tab={appointmentTab} /> : appointmentTab === "upcoming" ? <article className="max-w-2xl overflow-hidden rounded-md border border-care-line bg-background"><div className="flex items-center justify-between gap-2 border-b border-care-line bg-care-panel/60 px-4 py-3"><span className="flex items-center gap-2 text-xs font-semibold text-care-deep"><span className="size-2 rounded-full bg-care-amber" /> EXAMPLE REQUEST</span><Badge variant="outline" className="border-care-line bg-background text-[10px]">Not submitted</Badge></div><div className="p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-display text-xl font-semibold">Friday, November 13</p><p className="mt-1 text-sm text-muted-foreground">11:30 AM · Family medicine</p></div><span className="grid size-11 place-items-center rounded-md bg-care-mist text-care-teal"><CalendarDays className="size-5" /></span></div><div className="mt-5 space-y-3 border-t border-care-line pt-4 text-sm"><p className="flex items-center gap-2"><Stethoscope className="size-4 text-care-teal" />Dr. Amara Okafor</p><p className="flex items-center gap-2"><MapPin className="size-4 text-care-teal" />Clinic location · sample only</p></div><div className="mt-5 border-t border-care-line pt-4"><Button onClick={() => go("doctors")} variant="outline" size="sm" className="gap-2"><Plus className="size-3.5" /> Explore sample times</Button><p className="mt-3 text-[11px] text-muted-foreground">Appointment passes are unavailable until the clinic connection is configured.</p></div></div></article> : <div className="max-w-2xl rounded-md border border-care-line bg-background px-4 py-3"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-md bg-muted text-muted-foreground"><FileHeart className="size-[18px]" /></span><div><p className="text-sm font-semibold">Annual wellness visit</p><p className="mt-1 text-xs text-muted-foreground">Sample history · Tuesday, September 8</p></div><span className="ml-auto text-xs text-muted-foreground">Example only</span></div></div>}
             </div>}
 
             {activeView === "assistant" && <div className="max-w-2xl">
@@ -266,7 +270,7 @@ export function CarePulsePatientApp() {
 
             {activeView === "notifications" && <div className="max-w-2xl"><p className="mb-5 text-sm text-muted-foreground">Sample updates only · no messages from a live clinic.</p><div className="divide-y divide-care-line rounded-md border border-care-line bg-background px-4"><article className="flex gap-3 py-4"><span className="grid size-9 shrink-0 place-items-center rounded-md bg-care-panel text-care-teal"><CalendarDays className="size-4" /></span><div><p className="text-sm font-semibold">Your appointment is confirmed <Badge variant="outline" className="ml-1 border-care-line text-[9px] text-muted-foreground">SAMPLE</Badge></p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Sample update for Friday, November 13 at 11:30 AM.</p><p className="mt-2 text-[10px] text-muted-foreground">Example · 2 days ago</p></div></article><article className="flex gap-3 py-4"><span className="grid size-9 shrink-0 place-items-center rounded-md bg-secondary text-primary"><BadgeCheck className="size-4" /></span><div><p className="text-sm font-semibold">Welcome to CarePulse</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Explore the app in sample mode while the clinic connection is being prepared.</p><p className="mt-2 text-[10px] text-muted-foreground">Example · Last week</p></div></article></div></div>}
 
-            {activeView === "account" && <AccountScreen accountView={accountView} onSetView={setAccountView} />}
+            {activeView === "account" && <AccountScreen accountView={accountView} onSetView={setAccountView} session={session} record={record} />}
           </main>
 
           <footer className="hidden border-t border-care-line px-8 py-4 text-center text-[10px] text-muted-foreground md:block">CarePulse · Sample preview · Not for clinical use</footer>
@@ -281,26 +285,71 @@ export function CarePulsePatientApp() {
   );
 }
 
-function AccountScreen({ accountView, onSetView }: { accountView: AccountView; onSetView: (view: AccountView) => void }) {
+function LiveAppointments({ record, tab }: { record: Extract<PatientRecordState, { status: "linked" }>; tab: "upcoming" | "past" }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const list = record.appointments.filter((a) => (tab === "upcoming" ? a.appointment_date >= today : a.appointment_date < today));
+  if (list.length === 0) return <div className="max-w-2xl rounded-md border border-care-line bg-background px-4 py-6 text-sm text-muted-foreground">No {tab === "upcoming" ? "upcoming" : "past"} appointments on your clinic record.</div>;
+  return <div className="max-w-2xl space-y-3">{list.map((a) => <div key={a.id} className="rounded-md border border-care-line bg-background px-4 py-3"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-md bg-care-mist text-care-teal"><CalendarDays className="size-[18px]" /></span><div className="min-w-0"><p className="text-sm font-semibold">{new Date(`${a.appointment_date}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} · {a.appointment_time.slice(0, 5)}</p><p className="mt-1 truncate text-xs text-muted-foreground">{a.doctor?.full_name ?? "Doctor to be assigned"}{a.reason ? ` · ${a.reason}` : ""}</p></div><Badge variant="outline" className="ml-auto border-care-line text-[10px] capitalize">{a.status ?? "pending"}</Badge></div></div>)}</div>;
+}
+
+function AccountScreen({ accountView, onSetView, session, record }: { accountView: AccountView; onSetView: (view: AccountView) => void; session: Session | null; record: PatientRecordState }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const titles: Record<AccountView, { title: string; detail: string }> = {
     login: { title: "Welcome back.", detail: "Sign in to your CarePulse patient account." },
-    register: { title: "Your care starts here.", detail: "Create a patient profile to get started." },
-    forgot: { title: "Reset your password.", detail: "We’ll help you securely get back into your account." },
+    register: { title: "Create your account.", detail: "Use the email your clinic has on file so we can find your record." },
+    forgot: { title: "Reset your password.", detail: "We’ll email you a secure link to choose a new password." },
   };
   const isRegister = accountView === "register";
   const isForgot = accountView === "forgot";
+
+  if (session) {
+    return (
+      <section className="mx-auto max-w-md py-4 md:py-10">
+        <Badge variant="outline" className="mb-3 gap-1.5 border-care-line bg-background text-[10px] font-medium text-muted-foreground"><ShieldCheck className="size-3" /> SIGNED IN</Badge>
+        <h2 className="font-display text-[26px] font-semibold tracking-tight">Your patient profile</h2>
+        <p className="mt-2 text-sm text-muted-foreground">{session.user.email}</p>
+        <div className="mt-6 rounded-md border border-care-line bg-background p-4 text-sm">
+          {record.status === "loading" && <p className="text-muted-foreground">Looking up your clinic record…</p>}
+          {record.status === "unlinked" && <p className="text-muted-foreground">Your account isn’t linked to a clinic patient record yet. Please ask the clinic front desk to link it — your details stay private until they do.</p>}
+          {record.status === "blocked" && <p className="text-muted-foreground">{record.message}</p>}
+          {record.status === "linked" && <dl className="space-y-2">{([["Name", record.patient.full_name], ["Date of birth", record.patient.date_of_birth], ["Phone", record.patient.phone], ["Email", record.patient.email], ["Address", record.patient.address], ["Emergency contact", [record.patient.emergency_contact_name, record.patient.emergency_contact_phone].filter(Boolean).join(" · ")]] as const).map(([k, v]) => <div key={k} className="flex justify-between gap-4"><dt className="text-muted-foreground">{k}</dt><dd className="text-right font-medium">{v || "—"}</dd></div>)}</dl>}
+        </div>
+        <Button variant="outline" className="mt-5 w-full" onClick={() => void supabase.auth.signOut()}>Sign out</Button>
+      </section>
+    );
+  }
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setNotice(null);
+    const origin = window.location.origin;
+    const result = isForgot
+      ? await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${origin}/reset-password` })
+      : isRegister
+        ? await supabase.auth.signUp({ email, password, options: { emailRedirectTo: origin, data: { full_name: fullName } } })
+        : await supabase.auth.signInWithPassword({ email, password });
+    setBusy(false);
+    if (result.error) return setNotice({ tone: "error", text: result.error.message });
+    if (isForgot) setNotice({ tone: "ok", text: "If that email has an account, a reset link is on its way." });
+    else if (isRegister && !("session" in result.data && result.data.session)) setNotice({ tone: "ok", text: "Check your email to confirm your account, then sign in." });
+  };
+
   return (
-    <div className="mx-auto max-w-lg">
-      <div className="mb-7"><Badge variant="outline" className="mb-3 gap-1.5 border-care-line bg-background text-[10px] font-medium text-muted-foreground"><LockKeyhole className="size-3" /> CONNECTION REQUIRED</Badge><h2 className="font-display text-[26px] font-semibold tracking-tight">{titles[accountView].title}</h2><p className="mt-2 text-sm text-muted-foreground">{titles[accountView].detail}</p></div>
-      <form onSubmit={(event) => event.preventDefault()} className="space-y-4">
-        {isRegister && <label className="block text-xs font-medium">Full name<Input disabled placeholder="Your name" className="mt-1.5 bg-background" /></label>}
-        <label className="block text-xs font-medium">Email address<Input disabled type="email" placeholder="you@example.com" className="mt-1.5 bg-background" /></label>
-        {!isForgot && <label className="block text-xs font-medium">Password<Input disabled type="password" placeholder="Enter your password" className="mt-1.5 bg-background" /></label>}
-        {!isForgot && <label className="block text-xs font-medium">{isRegister ? "A little about your preferences (optional)" : "Reason for your visit"}<Textarea disabled placeholder="Optional · saved only after the clinic connection is ready" className="mt-1.5 min-h-[82px] resize-none bg-background" /></label>}
-        <div className="rounded-md border border-care-line bg-care-panel/60 p-3.5"><div className="flex gap-2.5"><LockKeyhole className="mt-0.5 size-4 shrink-0 text-care-teal" /><p className="text-xs leading-relaxed text-muted-foreground">This secure form will become available when the clinic’s existing account system is connected. Your details aren’t being collected in this preview.</p></div></div>
-        <Button type="button" disabled className="w-full">{isRegister ? "Create patient account" : isForgot ? "Send reset link" : "Sign in"} <ArrowRight className="size-4" /></Button>
+    <section className="mx-auto max-w-md py-4 md:py-10">
+      <div className="mb-7"><Badge variant="outline" className="mb-3 gap-1.5 border-care-line bg-background text-[10px] font-medium text-muted-foreground"><LockKeyhole className="size-3" /> SECURE ACCOUNT</Badge><h2 className="font-display text-[26px] font-semibold tracking-tight">{titles[accountView].title}</h2><p className="mt-2 text-sm text-muted-foreground">{titles[accountView].detail}</p></div>
+      <form className="space-y-4" onSubmit={submit}>
+        {isRegister && <label className="block text-xs font-medium">Full name<Input required value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your name" className="mt-1.5 bg-background" /></label>}
+        <label className="block text-xs font-medium">Email address<Input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="mt-1.5 bg-background" /></label>
+        {!isForgot && <label className="block text-xs font-medium">Password<Input required minLength={8} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" className="mt-1.5 bg-background" /></label>}
+        {notice && <p role="status" className={`rounded-md border p-3 text-xs ${notice.tone === "error" ? "border-destructive/40 text-destructive" : "border-care-line bg-care-panel/60 text-care-deep"}`}>{notice.text}</p>}
+        <Button type="submit" disabled={busy} className="w-full">{isRegister ? "Create patient account" : isForgot ? "Send reset link" : "Sign in"} <ArrowRight className="size-4" /></Button>
         <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground">{!isForgot && <Button type="button" variant="link" onClick={() => onSetView(isRegister ? "login" : "register")} className="h-auto p-0 text-xs text-care-teal">{isRegister ? "Already registered? Sign in" : "Create an account"}</Button>}{!isRegister && <Button type="button" variant="link" onClick={() => onSetView(isForgot ? "login" : "forgot")} className="h-auto p-0 text-xs text-care-teal">{isForgot ? "Return to sign in" : "Forgot password?"}</Button>}</div>
       </form>
-    </div>
+    </section>
   );
 }
