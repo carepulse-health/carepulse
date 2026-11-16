@@ -121,7 +121,21 @@ export type Database = {
             foreignKeyName: "appointments_doctor_id_fkey"
             columns: ["doctor_id"]
             isOneToOne: false
+            referencedRelation: "doctor_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
             referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "staff_doctor_directory"
             referencedColumns: ["id"]
           },
           {
@@ -318,7 +332,21 @@ export type Database = {
             foreignKeyName: "consultation_logs_doctor_id_fkey"
             columns: ["doctor_id"]
             isOneToOne: false
+            referencedRelation: "doctor_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultation_logs_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
             referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultation_logs_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "staff_doctor_directory"
             referencedColumns: ["id"]
           },
           {
@@ -373,7 +401,21 @@ export type Database = {
             foreignKeyName: "doctor_schedules_doctor_id_fkey"
             columns: ["doctor_id"]
             isOneToOne: false
+            referencedRelation: "doctor_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doctor_schedules_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
             referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doctor_schedules_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "staff_doctor_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -625,10 +667,130 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      doctor_directory: {
+        Row: {
+          availability_status: string | null
+          clinic_id: string | null
+          created_at: string | null
+          full_name: string | null
+          id: string | null
+          specialization: string | null
+        }
+        Insert: {
+          availability_status?: string | null
+          clinic_id?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id?: string | null
+          specialization?: string | null
+        }
+        Update: {
+          availability_status?: string | null
+          clinic_id?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id?: string | null
+          specialization?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doctors_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      doctor_schedule_directory: {
+        Row: {
+          clinic_id: string | null
+          day_of_week: string | null
+          doctor_id: string | null
+          end_time: string | null
+          id: string | null
+          is_available: boolean | null
+          start_time: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doctor_schedules_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doctor_schedules_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctor_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doctor_schedules_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doctor_schedules_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "staff_doctor_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_doctor_directory: {
+        Row: {
+          availability_status: string | null
+          clinic_id: string | null
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          id: string | null
+          phone: string | null
+          specialization: string | null
+          user_id: string | null
+        }
+        Insert: {
+          availability_status?: string | null
+          clinic_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string | null
+          phone?: string | null
+          specialization?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          availability_status?: string | null
+          clinic_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string | null
+          phone?: string | null
+          specialization?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doctors_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       carepulse_send_due_appointment_reminders: { Args: never; Returns: number }
+      link_patient_account: { Args: never; Returns: Json }
       submit_carepulse_screening: {
         Args: { _answers: Json; _submission_id: string }
         Returns: Json
