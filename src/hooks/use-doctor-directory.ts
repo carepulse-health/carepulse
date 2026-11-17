@@ -15,7 +15,7 @@ export type DoctorDirectoryState =
 const emptyDirectory = { doctors: [], schedules: [] } as const;
 
 /** Reads only the clinic-scoped directory views; database permissions remain authoritative. */
-export function useDoctorDirectory(enabled: boolean): DoctorDirectoryState {
+export function useDoctorDirectory(enabled: boolean, refreshToken = 0): DoctorDirectoryState {
   const [directory, setDirectory] = useState<DoctorDirectoryState>({
     status: enabled ? "loading" : "disabled",
     ...emptyDirectory,
@@ -67,7 +67,7 @@ export function useDoctorDirectory(enabled: boolean): DoctorDirectoryState {
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+  }, [enabled, refreshToken]);
 
   return directory;
 }

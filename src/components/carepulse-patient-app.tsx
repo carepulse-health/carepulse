@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { usePatientSession, type PatientRecordState } from "@/hooks/use-patient-session";
+import { requestPatientAccountLink, usePatientSession, type PatientRecordState } from "@/hooks/use-patient-session";
+import { useDoctorDirectory } from "@/hooks/use-doctor-directory";
 import type { Session } from "@supabase/supabase-js";
 import {
   Activity,
@@ -36,12 +37,6 @@ import { Input } from "@/components/ui/input";
 
 type View = "home" | "doctors" | "appointments" | "assistant" | "notifications" | "account";
 type AccountView = "login" | "register" | "forgot";
-
-const doctors = [
-  { name: "Dr. Amara Okafor", specialty: "Family medicine", initials: "AO", tone: "bg-care-panel text-care-deep", availability: "Today, 11:30 AM" },
-  { name: "Dr. Daniel Adeyemi", specialty: "Cardiology", initials: "DA", tone: "bg-secondary text-primary", availability: "Today, 2:00 PM" },
-  { name: "Dr. Zainab Bello", specialty: "Paediatrics", initials: "ZB", tone: "bg-muted text-muted-foreground", availability: "Tomorrow, 9:00 AM" },
-];
 
 const navigation: { id: View; label: string; icon: typeof House }[] = [
   { id: "home", label: "Overview", icon: House },
@@ -79,18 +74,31 @@ function SampleLabel() {
   );
 }
 
-function DoctorRow({ doctor, onBook }: { doctor: (typeof doctors)[number]; onBook: () => void }) {
+function doctorInitials(name: string | null) {
+  return (name ?? "").split(/\s+/).filter(Boolean).slice(-2).map((part) => part[0]).join("").toUpperCase() || "DR";
+}
+
+function doctorTone(index: number) {
+  return ["bg-care-panel text-care-deep", "bg-secondary text-primary", "bg-muted text-muted-foreground"][index % 3];
+}
+
+function scheduleLabel(day: string | null, start: string | null, end: string | null) {
+  const time = start && end ? `${start.slice(0, 5)}–${end.slice(0, 5)}` : "Hours not listed";
+  return `${day ?? "Day not listed"} · ${time}`;
+}
+
+function DoctorRow({ doctor, tone, scheduleText, onBook }: { doctor: { id: string | null; full_name: string | null; specialization: string | null }; tone: string; scheduleText: string; onBook: () => void }) {
   return (
     <div className="flex items-center gap-3 border-b border-care-line/70 py-3 last:border-b-0 last:pb-0">
-      <Avatar className={`size-11 rounded-md ${doctor.tone}`}>
-        <AvatarFallback className={`${doctor.tone} rounded-md text-xs font-semibold`}>{doctor.initials}</AvatarFallback>
+      <Avatar className={`size-11 rounded-md ${tone}`}>
+        <AvatarFallback className={`${tone} rounded-md text-xs font-semibold`}>{doctorInitials(doctor.full_name)}</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-care-ink">{doctor.name}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{doctor.specialty}</p>
+        <p className="truncate text-sm font-semibold text-care-ink">{doctor.full_name ?? "Doctor"}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{doctor.specialization ?? "Specialty not listed"}</p>
       </div>
-      <Button onClick={onBook} variant="outline" size="sm" className="shrink-0 px-2.5 text-xs">
-        View times
+      <Button onClick={onBook} variant="outline" size="sm" disabled={!doctor.id} className="shrink-0 px-2.5 text-xs">
+        {scheduleText ? "View times" : "No times"}
       </Button>
     </div>
   );
@@ -98,17 +106,22 @@ function DoctorRow({ doctor, onBook }: { doctor: (typeof doctors)[number]; onBoo
 
 export function CarePulsePatientApp() {
   const [activeView, setActiveView] = useState<View>("home");
-  const { session, record } = usePatientSession();
+  const { session, record, refreshRecord } = usePatientSession();
+  const [directoryRefreshToken, setDirectoryRefreshToken] = useState(0);
+  const directory = useDoctorDirectory(Boolean(session), directoryRefreshToken);
   const [accountView, setAccountView] = useState<AccountView>("login");
   const [searchTerm, setSearchTerm] = useState("");
   const [bannerOpen, setBannerOpen] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [chosenDoctor, setChosenDoctor] = useState<string | null>(null);
   const [appointmentTab, setAppointmentTab] = useState<"upcoming" | "past">("upcoming");
+  const availableDoctors = directory.status === "ready" ? directory.doctors : [];
   const filteredDoctors = useMemo(
-    () => doctors.filter((doctor) => `${doctor.name} ${doctor.specialty}`.toLowerCase().includes(searchTerm.toLowerCase())),
-    [searchTerm],
+    () => availableDoctors.filter((doctor) => `${doctor.full_name ?? ""} ${doctor.specialization ?? ""}`.toLowerCase().includes(searchTerm.toLowerCase())),
+    [availableDoctors, searchTerm],
   );
+  const selectedDoctor = availableDoctors.find((doctor) => doctor.id === chosenDoctor);
+  const selectedSchedules = directory.status === "ready" ? directory.schedules.filter((schedule) => schedule.doctor_id === chosenDoctor && schedule.is_available) : [];
 
   const go = (view: View) => {
     setActiveView(view);
@@ -116,13 +129,14 @@ export function CarePulsePatientApp() {
     if (view === "home") setChosenDoctor(null);
   };
 
-  const bookDemo = () => {
-    const firstDoctor = doctors.at(0);
-    if (!firstDoctor) return;
-
+  const bookDoctor = (doctorId?: string | null) => {
     setActiveView("doctors");
-    setChosenDoctor(firstDoctor.name);
+    setChosenDoctor(doctorId ?? null);
   };
+
+  const bookFirstListedDoctor = () => bookDoctor(availableDoctors.find((doctor) =>
+    directory.status === "ready" && directory.schedules.some((schedule) => schedule.doctor_id === doctor.id && schedule.is_available),
+  )?.id);
 
   const current = activeView === "account" ? null : heading[activeView];
 
@@ -131,7 +145,7 @@ export function CarePulsePatientApp() {
       {bannerOpen && (
         <div className="flex min-h-8 items-center justify-center gap-2 bg-care-deep px-10 py-1.5 text-center text-[11px] font-medium text-primary-foreground">
           <span className="size-1.5 shrink-0 rounded-full bg-care-amber" />
-          Sample preview · Sign-in and clinic records aren’t connected yet
+          Preview content is sample-only · Sign in to view your clinic directory
           <Button variant="ghost" size="icon" aria-label="Dismiss preview notice" onClick={() => setBannerOpen(false)} className="absolute right-2 h-6 w-6 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground">
             <X className="size-3" />
           </Button>
@@ -193,7 +207,7 @@ export function CarePulsePatientApp() {
                   <span className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/30 bg-primary-foreground/10 px-2.5 py-1 text-[10px] font-medium text-primary-foreground"><Sparkles className="size-3" /> A little easier, every step</span>
                   <h2 className="max-w-[390px] font-display text-[25px] font-semibold leading-[1.1] text-primary-foreground sm:text-[30px]">Good care starts with feeling heard.</h2>
                   <p className="mt-2 max-w-[335px] text-sm leading-relaxed text-primary-foreground/80">Find a doctor, keep visits together, and take your next step at your own pace.</p>
-                  <Button onClick={bookDemo} className="mt-5 gap-2 bg-primary-foreground text-care-deep hover:bg-primary-foreground/90">Find a doctor <ArrowRight className="size-4" /></Button>
+                  <Button onClick={bookFirstListedDoctor} className="mt-5 gap-2 bg-primary-foreground text-care-deep hover:bg-primary-foreground/90">Find a doctor <ArrowRight className="size-4" /></Button>
                 </div>
                 <div className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full border border-primary-foreground/30 bg-care-deep/60 px-2.5 py-1 text-[9px] font-medium text-primary-foreground"><span className="size-1.5 rounded-full bg-care-amber" /> SAMPLE APPOINTMENT</div>
               </section>
@@ -209,7 +223,7 @@ export function CarePulsePatientApp() {
                       <div className="grid gap-5 p-4 sm:grid-cols-[1fr_auto] sm:items-center sm:p-5">
                         <div className="flex items-start gap-3">
                           <div className="grid size-11 shrink-0 place-items-center rounded-md bg-care-mist text-care-teal"><CalendarDays className="size-[21px]" /></div>
-                          <div><p className="text-sm font-semibold text-care-ink">Friday, November 13</p><p className="mt-1 text-xs text-muted-foreground">11:30 AM · Family medicine</p><p className="mt-2 text-xs text-care-ink">Dr. Amara Okafor</p></div>
+                          <div><p className="text-sm font-semibold text-care-ink">Friday, November 13</p><p className="mt-1 text-xs text-muted-foreground">11:30 AM · Family medicine</p><p className="mt-2 text-xs text-care-ink">Doctor assigned on clinic record</p></div>
                         </div>
                         <Button onClick={() => go("appointments")} variant="outline" size="sm" className="gap-2 sm:self-center">View appointment <ArrowRight className="size-3.5" /></Button>
                       </div>
@@ -217,8 +231,13 @@ export function CarePulsePatientApp() {
                   </section>
 
                   <section>
-                    <SectionTitle title="A doctor for you" detail="Example clinicians · schedules aren’t connected" action={<Button variant="link" onClick={() => go("doctors")} className="h-8 gap-1 p-0 text-xs text-care-teal">Meet the team <ArrowRight className="size-3.5" /></Button>} />
-                    <div className="rounded-md border border-care-line bg-background px-4 py-1 sm:px-5">{doctors.slice(0, 2).map((doctor) => <DoctorRow key={doctor.name} doctor={doctor} onBook={bookDemo} />)}</div>
+                    <SectionTitle title="A doctor for you" detail="Clinicians and available times from your clinic directory" action={<Button variant="link" onClick={() => go("doctors")} className="h-8 gap-1 p-0 text-xs text-care-teal">Meet the team <ArrowRight className="size-3.5" /></Button>} />
+                    <div className="rounded-md border border-care-line bg-background px-4 py-1 sm:px-5">
+                      {directory.status === "ready" && availableDoctors.length > 0 ? availableDoctors.slice(0, 2).map((doctor, index) => {
+                        const scheduleText = directory.schedules.filter((schedule) => schedule.doctor_id === doctor.id && schedule.is_available).slice(0, 2).map((schedule) => scheduleLabel(schedule.day_of_week, schedule.start_time, schedule.end_time)).join(" · ");
+                        return <DoctorRow key={doctor.id} doctor={doctor} tone={doctorTone(index)} scheduleText={scheduleText} onBook={() => bookDoctor(doctor.id)} />;
+                      }) : <DirectoryMessage status={directory.status} message={directory.status === "error" ? directory.message : undefined} />}
+                    </div>
                   </section>
                 </div>
 
@@ -248,11 +267,15 @@ export function CarePulsePatientApp() {
 
             {activeView === "doctors" && <div className="space-y-5">
               <section className="flex flex-col justify-between gap-4 border-b border-care-line pb-5 sm:flex-row sm:items-end">
-                <div><p className="text-sm text-muted-foreground">Meet example doctors from the CarePulse directory.</p><p className="mt-1 text-xs text-muted-foreground">Sample names and schedules · clinic records aren’t connected.</p></div>
+                <div><p className="text-sm text-muted-foreground">Clinicians listed in your clinic’s directory.</p><p className="mt-1 text-xs text-muted-foreground">Only available clinic schedules are shown.</p></div>
                 <label className="relative block w-full sm:max-w-[280px]"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Name or specialty" aria-label="Search doctors" className="pl-9" /></label>
               </section>
-              {chosenDoctor && <div role="status" className="flex items-start justify-between gap-3 rounded-md border border-care-line bg-care-panel/60 p-4"><div className="flex gap-3"><div className="grid size-9 place-items-center rounded-md bg-background text-care-teal"><CalendarDays className="size-4" /></div><div><p className="text-sm font-semibold">Sample visit with {chosenDoctor}</p><p className="mt-1 text-xs text-muted-foreground">This preview doesn’t reserve a time or send a request.</p><div className="mt-3 flex flex-wrap gap-2">{["11:30 AM", "2:00 PM", "3:30 PM"].map((time) => <Badge key={time} variant="outline" className="border-care-line bg-background font-medium text-care-deep">{time}</Badge>)}</div></div></div><Button variant="ghost" size="icon" aria-label="Close sample visit times" onClick={() => setChosenDoctor(null)}><X className="size-4" /></Button></div>}
-              <div className="divide-y divide-care-line rounded-md border border-care-line bg-background px-4 sm:px-5">{filteredDoctors.length ? filteredDoctors.map((doctor) => <article key={doctor.name} className="flex flex-wrap items-center gap-3 py-4 sm:gap-4"><Avatar className={`size-12 rounded-md ${doctor.tone}`}><AvatarFallback className={`${doctor.tone} rounded-md text-xs font-semibold`}>{doctor.initials}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{doctor.name}</p><p className="mt-0.5 text-xs text-muted-foreground">{doctor.specialty}</p><p className="mt-1.5 flex items-center gap-1 text-[11px] text-care-teal"><Clock3 className="size-3" /> Example availability: {doctor.availability}</p></div><Button onClick={() => setChosenDoctor(doctor.name)} variant="outline" size="sm" className="gap-1.5">View times <ArrowRight className="size-3.5" /></Button></article>) : <p className="py-8 text-center text-sm text-muted-foreground">No sample doctors match that search.</p>}</div>
+              {chosenDoctor && <div role="status" className="flex items-start justify-between gap-3 rounded-md border border-care-line bg-care-panel/60 p-4"><div className="flex gap-3"><div className="grid size-9 place-items-center rounded-md bg-background text-care-teal"><CalendarDays className="size-4" /></div><div><p className="text-sm font-semibold">Available times{selectedDoctor?.full_name ? ` · ${selectedDoctor.full_name}` : ""}</p><p className="mt-1 text-xs text-muted-foreground">Times shown are read from the clinic schedule.</p><div className="mt-3 flex flex-wrap gap-2">{selectedSchedules.length ? selectedSchedules.map((schedule) => <Badge key={schedule.id} variant="outline" className="border-care-line bg-background font-medium text-care-deep">{scheduleLabel(schedule.day_of_week, schedule.start_time, schedule.end_time)}</Badge>) : <span className="text-xs text-muted-foreground">No available times are currently listed.</span>}</div></div></div><Button variant="ghost" size="icon" aria-label="Close doctor times" onClick={() => setChosenDoctor(null)}><X className="size-4" /></Button></div>}
+              {directory.status === "ready" ? <div className="divide-y divide-care-line rounded-md border border-care-line bg-background px-4 sm:px-5">{filteredDoctors.length ? filteredDoctors.map((doctor, index) => {
+                const schedules = directory.schedules.filter((schedule) => schedule.doctor_id === doctor.id && schedule.is_available);
+                const tone = doctorTone(index);
+                return <article key={doctor.id} className="flex flex-wrap items-center gap-3 py-4 sm:gap-4"><Avatar className={`size-12 rounded-md ${tone}`}><AvatarFallback className={`${tone} rounded-md text-xs font-semibold`}>{doctorInitials(doctor.full_name)}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{doctor.full_name ?? "Doctor"}</p><p className="mt-0.5 text-xs text-muted-foreground">{doctor.specialization ?? "Specialty not listed"}</p><p className="mt-1.5 flex items-center gap-1 text-[11px] text-care-teal"><Clock3 className="size-3" />{schedules.length ? `${schedules.length} available ${schedules.length === 1 ? "schedule" : "schedules"}` : "No available schedule listed"}</p></div><Button onClick={() => bookDoctor(doctor.id)} variant="outline" size="sm" disabled={!schedules.length} className="gap-1.5">View times <ArrowRight className="size-3.5" /></Button></article>;
+              }) : <p className="py-8 text-center text-sm text-muted-foreground">No clinic doctors match that search.</p>}</div> : <div className="rounded-md border border-care-line bg-background px-4 py-1 sm:px-5"><DirectoryMessage status={directory.status} message={directory.status === "error" ? directory.message : undefined} /></div>}
             </div>}
 
             {activeView === "appointments" && <div className="space-y-5">
@@ -269,7 +292,7 @@ export function CarePulsePatientApp() {
 
             {activeView === "notifications" && <div className="max-w-2xl"><p className="mb-5 text-sm text-muted-foreground">Sample updates only · no messages from a live clinic.</p><div className="divide-y divide-care-line rounded-md border border-care-line bg-background px-4"><article className="flex gap-3 py-4"><span className="grid size-9 shrink-0 place-items-center rounded-md bg-care-panel text-care-teal"><CalendarDays className="size-4" /></span><div><p className="text-sm font-semibold">Your appointment is confirmed <Badge variant="outline" className="ml-1 border-care-line text-[9px] text-muted-foreground">SAMPLE</Badge></p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Sample update for Friday, November 13 at 11:30 AM.</p><p className="mt-2 text-[10px] text-muted-foreground">Example · 2 days ago</p></div></article><article className="flex gap-3 py-4"><span className="grid size-9 shrink-0 place-items-center rounded-md bg-secondary text-primary"><BadgeCheck className="size-4" /></span><div><p className="text-sm font-semibold">Welcome to CarePulse</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Explore the app in sample mode while the clinic connection is being prepared.</p><p className="mt-2 text-[10px] text-muted-foreground">Example · Last week</p></div></article></div></div>}
 
-            {activeView === "account" && <AccountScreen accountView={accountView} onSetView={setAccountView} session={session} record={record} />}
+            {activeView === "account" && <AccountScreen accountView={accountView} onSetView={setAccountView} session={session} record={record} refreshRecord={refreshRecord} onAccountLinked={() => setDirectoryRefreshToken((token) => token + 1)} />}
           </main>
 
           <footer className="hidden border-t border-care-line px-8 py-4 text-center text-[10px] text-muted-foreground md:block">CarePulse · Sample preview · Not for clinical use</footer>
