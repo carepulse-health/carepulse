@@ -13,10 +13,15 @@ export type PatientRecordState =
   | { status: "blocked"; message: string }
   | { status: "linked"; patient: Tables<"patients">; appointments: PatientAppointment[] };
 
+export async function requestPatientAccountLink() {
+  return supabase.rpc("link_patient_account");
+}
+
 /** Reads only rows the clinic's security rules allow for the signed-in patient (patients.auth_user_id = auth user). */
 export function usePatientSession() {
   const [session, setSession] = useState<Session | null>(null);
   const [record, setRecord] = useState<PatientRecordState>({ status: "signed-out" });
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
@@ -48,7 +53,9 @@ export function usePatientSession() {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, reloadKey]);
 
-  return { session, record };
+  const refreshRecord = () => setReloadKey((key) => key + 1);
+
+  return { session, record, refreshRecord };
 }
