@@ -79,7 +79,7 @@ function doctorInitials(name: string | null) {
 }
 
 function doctorTone(index: number) {
-  return ["bg-care-panel text-care-deep", "bg-secondary text-primary", "bg-muted text-muted-foreground"][index % 3];
+  return ["bg-care-panel text-care-deep", "bg-secondary text-primary", "bg-muted text-muted-foreground"][index % 3] ?? "bg-care-panel text-care-deep";
 }
 
 function scheduleLabel(day: string | null, start: string | null, end: string | null) {
