@@ -42,6 +42,25 @@ describe("clinic doctor directory", () => {
     expect(from).not.toHaveBeenCalled();
   });
 
+  it("reports directory access errors without returning records", async () => {
+    from.mockImplementation(() => ({
+      select: vi.fn().mockResolvedValue({
+        data: null,
+        error: { code: "42501", message: "permission denied" },
+      }),
+    }));
+
+    const { result } = renderHook(() => useDoctorDirectory(true));
+
+    await waitFor(() => expect(result.current.status).toBe("error"));
+    expect(result.current).toMatchObject({
+      status: "error",
+      doctors: [],
+      schedules: [],
+      message: "Your patient account cannot access the clinic directory yet.",
+    });
+  });
+
   it("requests account linking through the approved RPC", async () => {
     rpc.mockResolvedValue({ data: { success: true }, error: null });
 

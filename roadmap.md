@@ -2,3 +2,5 @@
 - [x] Add Capacitor Android handoff instructions.
 - [x] Verify routes, interactions, mobile/desktop presentation, and preview diagnostics.
 - [x] Keep live data/auth/AI integration blocked until the existing clinic database is connected and the screening safety specification is available.
+- [x] Replace patient-facing demo clinicians with protected clinic-directory reads and connect account linking to the approved database function.
+- [x] Verify directory access states and account-link RPC wiring with focused tests; confirm live directory row availability.

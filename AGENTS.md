@@ -31,3 +31,4 @@ use the editor.
 
 ## CarePulse structure
 - Keep patient-facing views and sample-only state in `src/components/carepulse-patient-app.tsx` so future clinic-data integration can replace sample sources without duplicating navigation.
+- Keep live clinic-directory reads in `src/hooks/use-doctor-directory.ts`; UI views consume only its typed, clinic-scoped directory results.

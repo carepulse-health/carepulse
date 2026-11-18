@@ -7,28 +7,31 @@ export type DirectoryDoctor = Tables<"doctor_directory">;
 export type DirectorySchedule = Tables<"doctor_schedule_directory">;
 
 export type DoctorDirectoryState =
-  | { status: "disabled"; doctors: []; schedules: [] }
-  | { status: "loading"; doctors: []; schedules: [] }
-  | { status: "error"; doctors: []; schedules: []; message: string }
+  | { status: "disabled"; doctors: DirectoryDoctor[]; schedules: DirectorySchedule[] }
+  | { status: "loading"; doctors: DirectoryDoctor[]; schedules: DirectorySchedule[] }
+  | { status: "error"; doctors: DirectoryDoctor[]; schedules: DirectorySchedule[]; message: string }
   | { status: "ready"; doctors: DirectoryDoctor[]; schedules: DirectorySchedule[] };
 
-const emptyDirectory = { doctors: [], schedules: [] } as const;
+function emptyDirectory() {
+  return { doctors: [] as DirectoryDoctor[], schedules: [] as DirectorySchedule[] };
+}
 
 /** Reads only the clinic-scoped directory views; database permissions remain authoritative. */
 export function useDoctorDirectory(enabled: boolean, refreshToken = 0): DoctorDirectoryState {
-  const [directory, setDirectory] = useState<DoctorDirectoryState>({
-    status: enabled ? "loading" : "disabled",
-    ...emptyDirectory,
-  });
+  const [directory, setDirectory] = useState<DoctorDirectoryState>(() =>
+    enabled
+      ? { status: "loading", ...emptyDirectory() }
+      : { status: "disabled", ...emptyDirectory() },
+  );
 
   useEffect(() => {
     if (!enabled) {
-      setDirectory({ status: "disabled", ...emptyDirectory });
+      setDirectory({ status: "disabled", ...emptyDirectory() });
       return;
     }
 
     let cancelled = false;
-    setDirectory({ status: "loading", ...emptyDirectory });
+    setDirectory({ status: "loading", ...emptyDirectory() });
 
     void (async () => {
       const [doctorResult, scheduleResult] = await Promise.all([
@@ -46,7 +49,7 @@ export function useDoctorDirectory(enabled: boolean, refreshToken = 0): DoctorDi
       if (error) {
         setDirectory({
           status: "error",
-          ...emptyDirectory,
+          ...emptyDirectory(),
           message: error.code === "42501"
             ? "Your patient account cannot access the clinic directory yet."
             : "The clinic directory couldn’t be loaded right now.",
@@ -68,6 +71,8 @@ export function useDoctorDirectory(enabled: boolean, refreshToken = 0): DoctorDi
       cancelled = true;
     };
   }, [enabled, refreshToken]);
+
+  if (!enabled) return { status: "disabled", ...emptyDirectory() };
 
   return directory;
 }

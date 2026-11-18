@@ -66,10 +66,10 @@ function SectionTitle({ title, detail, action }: { title: string; detail?: strin
   );
 }
 
-function SampleLabel() {
+function SampleLabel({ liveDirectory }: { liveDirectory: boolean }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-care-line bg-background px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
-      <span className="size-1.5 rounded-full bg-care-amber" /> SAMPLE PREVIEW
+      <span className={`size-1.5 rounded-full ${liveDirectory ? "bg-care-teal" : "bg-care-amber"}`} /> {liveDirectory ? "CLINIC DIRECTORY" : "SAMPLE PREVIEW"}
     </span>
   );
 }
@@ -85,6 +85,18 @@ function doctorTone(index: number) {
 function scheduleLabel(day: string | null, start: string | null, end: string | null) {
   const time = start && end ? `${start.slice(0, 5)}–${end.slice(0, 5)}` : "Hours not listed";
   return `${day ?? "Day not listed"} · ${time}`;
+}
+
+function DirectoryMessage({ status, message, signedIn, onLink }: { status: "disabled" | "loading" | "error" | "ready"; message: string | undefined; signedIn: boolean; onLink: (() => void) | undefined }) {
+  const text = status === "loading"
+    ? "Loading your clinic directory…"
+    : status === "error"
+      ? message ?? "The clinic directory couldn’t be loaded right now."
+      : status === "disabled"
+        ? signedIn ? "Link your clinic record to view its clinic directory." : "Sign in to view your clinic directory."
+        : "No clinic doctors are currently listed.";
+
+  return <div className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm text-muted-foreground"><p>{text}</p>{status === "disabled" && onLink && <Button variant="link" onClick={onLink} className="h-auto p-0 text-xs text-care-teal">{signedIn ? "Link record" : "Sign in"}</Button>}</div>;
 }
 
 function DoctorRow({ doctor, tone, scheduleText, onBook }: { doctor: { id: string | null; full_name: string | null; specialization: string | null }; tone: string; scheduleText: string; onBook: () => void }) {
@@ -108,7 +120,7 @@ export function CarePulsePatientApp() {
   const [activeView, setActiveView] = useState<View>("home");
   const { session, record, refreshRecord } = usePatientSession();
   const [directoryRefreshToken, setDirectoryRefreshToken] = useState(0);
-  const directory = useDoctorDirectory(Boolean(session), directoryRefreshToken);
+  const directory = useDoctorDirectory(record.status === "linked", directoryRefreshToken);
   const [accountView, setAccountView] = useState<AccountView>("login");
   const [searchTerm, setSearchTerm] = useState("");
   const [bannerOpen, setBannerOpen] = useState(true);
@@ -185,7 +197,7 @@ export function CarePulsePatientApp() {
               <span className="hidden text-sm text-muted-foreground sm:block">Patient care</span>
             </div>
             <div className="flex items-center gap-2.5">
-              <SampleLabel />
+              <SampleLabel liveDirectory={activeView === "doctors" && directory.status === "ready"} />
               <Button variant="ghost" size="icon" aria-label="View notifications" onClick={() => go("notifications")} className="relative"><Bell className="size-[18px]" /><span className="absolute right-2 top-2 size-1.5 rounded-full bg-care-teal ring-2 ring-background" /></Button>
               <Button variant="ghost" onClick={() => go("account")} aria-label="Patient account" className="size-9 rounded-md p-0"><Avatar className="size-8 rounded-md bg-care-panel"><AvatarFallback className="rounded-md bg-care-panel text-xs font-semibold text-care-deep">PA</AvatarFallback></Avatar></Button>
             </div>
@@ -196,7 +208,7 @@ export function CarePulsePatientApp() {
           <main className="mx-auto max-w-[1140px] px-4 pb-28 pt-7 sm:px-7 md:pb-12 md:pt-9 lg:px-10">
             {current && <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <div><p className="text-[10px] font-semibold text-care-teal">{current.eyebrow}</p><h1 className="mt-1 font-display text-[27px] font-semibold leading-tight tracking-tight text-care-ink sm:text-[32px]">{current.title}</h1></div>
-              <Badge variant="outline" className="gap-1.5 border-care-line bg-background text-[10px] font-medium text-muted-foreground"><span className="size-1.5 rounded-full bg-care-amber" /> DEMO DATA</Badge>
+              <Badge variant="outline" className="gap-1.5 border-care-line bg-background text-[10px] font-medium text-muted-foreground"><span className={`size-1.5 rounded-full ${activeView === "doctors" ? "bg-care-teal" : "bg-care-amber"}`} /> {activeView === "doctors" ? "CLINIC DIRECTORY" : "DEMO DATA"}</Badge>
             </div>}
 
             {activeView === "home" && <div className="space-y-7">
@@ -235,8 +247,8 @@ export function CarePulsePatientApp() {
                     <div className="rounded-md border border-care-line bg-background px-4 py-1 sm:px-5">
                       {directory.status === "ready" && availableDoctors.length > 0 ? availableDoctors.slice(0, 2).map((doctor, index) => {
                         const scheduleText = directory.schedules.filter((schedule) => schedule.doctor_id === doctor.id && schedule.is_available).slice(0, 2).map((schedule) => scheduleLabel(schedule.day_of_week, schedule.start_time, schedule.end_time)).join(" · ");
-                        return <DoctorRow key={doctor.id} doctor={doctor} tone={doctorTone(index)} scheduleText={scheduleText} onBook={() => bookDoctor(doctor.id)} />;
-                      }) : <DirectoryMessage status={directory.status} message={directory.status === "error" ? directory.message : undefined} />}
+                        return <DoctorRow key={doctor.id ?? `doctor-${index}`} doctor={doctor} tone={doctorTone(index)} scheduleText={scheduleText} onBook={() => bookDoctor(doctor.id)} />;
+                      }) : <DirectoryMessage status={directory.status} message={directory.status === "error" ? directory.message : undefined} signedIn={Boolean(session)} onLink={() => go(session ? "account" : "account")} />}
                     </div>
                   </section>
                 </div>
@@ -275,12 +287,12 @@ export function CarePulsePatientApp() {
                 const schedules = directory.schedules.filter((schedule) => schedule.doctor_id === doctor.id && schedule.is_available);
                 const tone = doctorTone(index);
                 return <article key={doctor.id} className="flex flex-wrap items-center gap-3 py-4 sm:gap-4"><Avatar className={`size-12 rounded-md ${tone}`}><AvatarFallback className={`${tone} rounded-md text-xs font-semibold`}>{doctorInitials(doctor.full_name)}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{doctor.full_name ?? "Doctor"}</p><p className="mt-0.5 text-xs text-muted-foreground">{doctor.specialization ?? "Specialty not listed"}</p><p className="mt-1.5 flex items-center gap-1 text-[11px] text-care-teal"><Clock3 className="size-3" />{schedules.length ? `${schedules.length} available ${schedules.length === 1 ? "schedule" : "schedules"}` : "No available schedule listed"}</p></div><Button onClick={() => bookDoctor(doctor.id)} variant="outline" size="sm" disabled={!schedules.length} className="gap-1.5">View times <ArrowRight className="size-3.5" /></Button></article>;
-              }) : <p className="py-8 text-center text-sm text-muted-foreground">No clinic doctors match that search.</p>}</div> : <div className="rounded-md border border-care-line bg-background px-4 py-1 sm:px-5"><DirectoryMessage status={directory.status} message={directory.status === "error" ? directory.message : undefined} /></div>}
+              }) : <p className="py-8 text-center text-sm text-muted-foreground">No clinic doctors match that search.</p>}</div> : <div className="rounded-md border border-care-line bg-background px-4 py-1 sm:px-5"><DirectoryMessage status={directory.status} message={directory.status === "error" ? directory.message : undefined} signedIn={Boolean(session)} onLink={() => go("account")} /></div>}
             </div>}
 
             {activeView === "appointments" && <div className="space-y-5">
               <section className="flex flex-wrap items-center justify-between gap-3 border-b border-care-line pb-4"><p className="text-sm text-muted-foreground">Sample appointments · no booking information is stored.</p><div className="flex gap-1 rounded-md bg-muted p-1"><Button size="sm" variant={appointmentTab === "upcoming" ? "default" : "ghost"} onClick={() => setAppointmentTab("upcoming")} className="h-8 px-3 text-xs">Upcoming</Button><Button size="sm" variant={appointmentTab === "past" ? "default" : "ghost"} onClick={() => setAppointmentTab("past")} className="h-8 px-3 text-xs">Past visits</Button></div></section>
-              {record.status === "linked" ? <LiveAppointments record={record} tab={appointmentTab} /> : appointmentTab === "upcoming" ? <article className="max-w-2xl overflow-hidden rounded-md border border-care-line bg-background"><div className="flex items-center justify-between gap-2 border-b border-care-line bg-care-panel/60 px-4 py-3"><span className="flex items-center gap-2 text-xs font-semibold text-care-deep"><span className="size-2 rounded-full bg-care-amber" /> EXAMPLE REQUEST</span><Badge variant="outline" className="border-care-line bg-background text-[10px]">Not submitted</Badge></div><div className="p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-display text-xl font-semibold">Friday, November 13</p><p className="mt-1 text-sm text-muted-foreground">11:30 AM · Family medicine</p></div><span className="grid size-11 place-items-center rounded-md bg-care-mist text-care-teal"><CalendarDays className="size-5" /></span></div><div className="mt-5 space-y-3 border-t border-care-line pt-4 text-sm"><p className="flex items-center gap-2"><Stethoscope className="size-4 text-care-teal" />Dr. Amara Okafor</p><p className="flex items-center gap-2"><MapPin className="size-4 text-care-teal" />Clinic location · sample only</p></div><div className="mt-5 border-t border-care-line pt-4"><Button onClick={() => go("doctors")} variant="outline" size="sm" className="gap-2"><Plus className="size-3.5" /> Explore sample times</Button><p className="mt-3 text-[11px] text-muted-foreground">Appointment passes are unavailable until the clinic connection is configured.</p></div></div></article> : <div className="max-w-2xl rounded-md border border-care-line bg-background px-4 py-3"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-md bg-muted text-muted-foreground"><FileHeart className="size-[18px]" /></span><div><p className="text-sm font-semibold">Annual wellness visit</p><p className="mt-1 text-xs text-muted-foreground">Sample history · Tuesday, September 8</p></div><span className="ml-auto text-xs text-muted-foreground">Example only</span></div></div>}
+              {record.status === "linked" ? <LiveAppointments record={record} tab={appointmentTab} /> : appointmentTab === "upcoming" ? <article className="max-w-2xl overflow-hidden rounded-md border border-care-line bg-background"><div className="flex items-center justify-between gap-2 border-b border-care-line bg-care-panel/60 px-4 py-3"><span className="flex items-center gap-2 text-xs font-semibold text-care-deep"><span className="size-2 rounded-full bg-care-amber" /> EXAMPLE REQUEST</span><Badge variant="outline" className="border-care-line bg-background text-[10px]">Not submitted</Badge></div><div className="p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-display text-xl font-semibold">Friday, November 13</p><p className="mt-1 text-sm text-muted-foreground">11:30 AM · Family medicine</p></div><span className="grid size-11 place-items-center rounded-md bg-care-mist text-care-teal"><CalendarDays className="size-5" /></span></div><div className="mt-5 space-y-3 border-t border-care-line pt-4 text-sm"><p className="flex items-center gap-2"><Stethoscope className="size-4 text-care-teal" />Doctor assigned on clinic record</p><p className="flex items-center gap-2"><MapPin className="size-4 text-care-teal" />Clinic location · sample only</p></div><div className="mt-5 border-t border-care-line pt-4"><Button onClick={() => go("doctors")} variant="outline" size="sm" className="gap-2"><Plus className="size-3.5" /> Explore clinic directory</Button><p className="mt-3 text-[11px] text-muted-foreground">Appointment passes are unavailable until the clinic connection is configured.</p></div></div></article> : <div className="max-w-2xl rounded-md border border-care-line bg-background px-4 py-3"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-md bg-muted text-muted-foreground"><FileHeart className="size-[18px]" /></span><div><p className="text-sm font-semibold">Annual wellness visit</p><p className="mt-1 text-xs text-muted-foreground">Sample history · Tuesday, September 8</p></div><span className="ml-auto text-xs text-muted-foreground">Example only</span></div></div>}
             </div>}
 
             {activeView === "assistant" && <div className="max-w-2xl">
@@ -314,7 +326,7 @@ function LiveAppointments({ record, tab }: { record: Extract<PatientRecordState,
   return <div className="max-w-2xl space-y-3">{list.map((a) => <div key={a.id} className="rounded-md border border-care-line bg-background px-4 py-3"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-md bg-care-mist text-care-teal"><CalendarDays className="size-[18px]" /></span><div className="min-w-0"><p className="text-sm font-semibold">{new Date(`${a.appointment_date}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} · {a.appointment_time.slice(0, 5)}</p><p className="mt-1 truncate text-xs text-muted-foreground">{a.doctor?.full_name ?? "Doctor to be assigned"}{a.reason ? ` · ${a.reason}` : ""}</p></div><Badge variant="outline" className="ml-auto border-care-line text-[10px] capitalize">{a.status ?? "pending"}</Badge></div></div>)}</div>;
 }
 
-function AccountScreen({ accountView, onSetView, session, record }: { accountView: AccountView; onSetView: (view: AccountView) => void; session: Session | null; record: PatientRecordState }) {
+function AccountScreen({ accountView, onSetView, session, record, refreshRecord, onAccountLinked }: { accountView: AccountView; onSetView: (view: AccountView) => void; session: Session | null; record: PatientRecordState; refreshRecord: () => void; onAccountLinked: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -328,6 +340,30 @@ function AccountScreen({ accountView, onSetView, session, record }: { accountVie
   const isRegister = accountView === "register";
   const isForgot = accountView === "forgot";
 
+  const linkClinicRecord = async () => {
+    setBusy(true);
+    setNotice(null);
+    const { error } = await requestPatientAccountLink();
+    setBusy(false);
+    if (error) {
+      const message = error.message.includes("EMAIL_NOT_VERIFIED")
+        ? "Confirm your email address before linking your clinic record."
+        : error.message.includes("ALREADY_LINKED")
+          ? "This account is already linked to a clinic record. Refreshing your profile."
+          : error.message.includes("MULTIPLE_MATCHES")
+            ? "The clinic needs to review multiple records matching this email. Contact the front desk."
+            : error.message.includes("NOT_FOUND")
+              ? "No clinic record matched your verified email. Contact the front desk for help."
+              : "Your clinic record couldn’t be linked right now. Please try again later.";
+      setNotice({ tone: "error", text: message });
+      if (error.message.includes("ALREADY_LINKED")) refreshRecord();
+      return;
+    }
+    setNotice({ tone: "ok", text: "Your clinic record is linked. Loading your profile…" });
+    refreshRecord();
+    onAccountLinked();
+  };
+
   if (session) {
     return (
       <section className="mx-auto max-w-md py-4 md:py-10">
@@ -336,10 +372,11 @@ function AccountScreen({ accountView, onSetView, session, record }: { accountVie
         <p className="mt-2 text-sm text-muted-foreground">{session.user.email}</p>
         <div className="mt-6 rounded-md border border-care-line bg-background p-4 text-sm">
           {record.status === "loading" && <p className="text-muted-foreground">Looking up your clinic record…</p>}
-          {record.status === "unlinked" && <p className="text-muted-foreground">Your account isn’t linked to a clinic patient record yet. Please ask the clinic front desk to link it — your details stay private until they do.</p>}
+          {record.status === "unlinked" && <div className="space-y-3"><p className="text-muted-foreground">Your account isn’t linked to a clinic patient record yet. Link the record matching your verified email address.</p><Button onClick={() => void linkClinicRecord()} disabled={busy} className="w-full">{busy ? "Checking clinic record…" : "Link my clinic record"}</Button></div>}
           {record.status === "blocked" && <p className="text-muted-foreground">{record.message}</p>}
           {record.status === "linked" && <dl className="space-y-2">{([["Name", record.patient.full_name], ["Date of birth", record.patient.date_of_birth], ["Phone", record.patient.phone], ["Email", record.patient.email], ["Address", record.patient.address], ["Emergency contact", [record.patient.emergency_contact_name, record.patient.emergency_contact_phone].filter(Boolean).join(" · ")]] as const).map(([k, v]) => <div key={k} className="flex justify-between gap-4"><dt className="text-muted-foreground">{k}</dt><dd className="text-right font-medium">{v || "—"}</dd></div>)}</dl>}
         </div>
+        {notice && <p role="status" className={`mt-3 rounded-md border p-3 text-xs ${notice.tone === "error" ? "border-destructive/40 text-destructive" : "border-care-line bg-care-panel/60 text-care-deep"}`}>{notice.text}</p>}
         <Button variant="outline" className="mt-5 w-full" onClick={() => void supabase.auth.signOut()}>Sign out</Button>
       </section>
     );
